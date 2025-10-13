@@ -7,7 +7,7 @@ st.set_page_config(layout="wide", page_title="ClimateScope Prototype")
 st.title("🌍 ClimateScope — Milestone 2 Prototype")
 
 DATA_PATH = "data/processed/monthly_agg.parquet"
-REQUIRED_COLS = ["country", "year", "month", "temperature_c", "precip_mm", "humidity", "wind_speed_mps"]
+REQUIRED_COLS = ["country", "year", "month", "temperature_celsius", "precip_mm", "humidity", "wind_mps"]
 
 if not os.path.exists(DATA_PATH):
     st.warning("Run scripts/aggregate_daily_to_monthly.py first to generate data.")
@@ -23,7 +23,7 @@ else:
     st.sidebar.header("Filters")
     countries = ["All"] + sorted(df['country'].dropna().unique())
     sel_country = st.sidebar.selectbox("Country", countries)
-    variable_options = [col for col in ["temperature_c","precip_mm","humidity","wind_speed_mps"] if col in df.columns]
+    variable_options = [col for col in ["temperature_celsius","precip_mm","humidity","wind_mps"] if col in df.columns]
     variable = st.sidebar.selectbox("Variable", variable_options)
     years = sorted(df['year'].unique())
     yr_min, yr_max = min(years), max(years)
