@@ -1,9 +1,6 @@
+streamlit
 pandas
 numpy
-pyarrow
 plotly
-streamlit
 scipy
-geopandas
-country_converter
 python-dateutil
