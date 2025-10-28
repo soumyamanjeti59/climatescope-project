@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import io
 
 st.set_page_config(layout="wide", page_title="ClimateScope Prototype")
 st.title("🌍 ClimateScope — Milestone 3 Prototype")
@@ -36,7 +37,6 @@ else:
     if sel_countries:
         filtered = filtered[filtered['country'].isin(sel_countries)]
 
-    # Load extremes data if present
     extremes = None
     if os.path.exists("analysis/extremes.csv"):
         ex = pd.read_csv("analysis/extremes.csv")
@@ -44,7 +44,7 @@ else:
             ex = ex[ex['country'].isin(sel_countries)]
         extremes = ex
 
-    # Choropleth (handles multiple countries)
+    # Choropleth
     if not filtered.empty:
         country_avg = filtered.groupby('country')[variable].mean().reset_index()
         fig = px.choropleth(
@@ -58,7 +58,7 @@ else:
     else:
         st.info("No data for choropleth.")
 
-    # --- Trend Chart with Type Toggle and Extremes Markers ---
+    # Trend Chart with Toggle and Markers
     if not filtered.empty:
         if chart_type == "Heatmap":
             filtered['month_num'] = pd.to_datetime(filtered['month']).dt.month
@@ -76,7 +76,6 @@ else:
                 title=f"{variable} Heatmap (Country vs Month)"
             )
         else:
-            # Line or bar chart
             if chart_type == "Line":
                 fig2 = px.line(
                     filtered,
@@ -93,7 +92,7 @@ else:
                     color='country',
                     title=f"{variable} Bar Comparison ({yr_range[0]}-{yr_range[1]})"
                 )
-            # ---- Add Extreme Markers ----
+
             if extremes is not None and not extremes.empty and chart_type in ("Line", "Bar"):
                 for country in sel_countries:
                     df_ext = extremes[(extremes['country'] == country)]
@@ -105,9 +104,31 @@ else:
                         marker=dict(color='red', size=12, symbol='x'),
                         showlegend=True
                     ))
+
         st.plotly_chart(fig2, use_container_width=True)
+
+        # Download Chart as PNG (requires kaleido)
+        buf = io.BytesIO()
+        fig2.write_image(buf, format="png")
+        st.download_button(
+            label="Download Chart as PNG",
+            data=buf,
+            file_name="chart.png",
+            mime="image/png"
+        )
+
     else:
         st.info("No data for selected chart.")
+
+    # Download filtered data as CSV
+    if not filtered.empty:
+        csv = filtered.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Filtered Data as CSV",
+            data=csv,
+            file_name="filtered_data.csv",
+            mime="text/csv",
+        )
 
     # Extremes Table
     if extremes is not None:
