@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import os
 
 st.set_page_config(layout="wide", page_title="ClimateScope Prototype")
@@ -22,7 +23,6 @@ else:
 
     st.sidebar.header("Filters")
     countries = sorted(df['country'].dropna().unique())
-    # Multi-country selection
     sel_countries = st.sidebar.multiselect("Countries (compare multiple!)", countries, default=countries[:1])
     variable_options = [col for col in ["temperature_celsius", "precip_mm", "humidity", "wind_mps"] if col in df.columns]
     variable = st.sidebar.selectbox("Variable", variable_options)
@@ -30,13 +30,19 @@ else:
     yr_min, yr_max = min(years), max(years)
     yr_range = st.sidebar.slider("Year range", yr_min, yr_max, (yr_min, yr_max))
 
-    # --- Visualization type toggle ---
     chart_type = st.sidebar.radio("Trend Chart Type", ["Line", "Bar", "Heatmap"])
 
-    # Filter using selected countries
     filtered = df[(df['year'] >= yr_range[0]) & (df['year'] <= yr_range[1])]
     if sel_countries:
         filtered = filtered[filtered['country'].isin(sel_countries)]
+
+    # Load extremes data if present
+    extremes = None
+    if os.path.exists("analysis/extremes.csv"):
+        ex = pd.read_csv("analysis/extremes.csv")
+        if sel_countries:
+            ex = ex[ex['country'].isin(sel_countries)]
+        extremes = ex
 
     # Choropleth (handles multiple countries)
     if not filtered.empty:
@@ -52,26 +58,9 @@ else:
     else:
         st.info("No data for choropleth.")
 
-    # --- Trend Chart with Type Toggle ---
+    # --- Trend Chart with Type Toggle and Extremes Markers ---
     if not filtered.empty:
-        if chart_type == "Line":
-            fig2 = px.line(
-                filtered,
-                x='month',
-                y=variable,
-                color='country',
-                title=f"{variable} Trend Comparison ({yr_range[0]}-{yr_range[1]})"
-            )
-        elif chart_type == "Bar":
-            fig2 = px.bar(
-                filtered,
-                x='month',
-                y=variable,
-                color='country',
-                title=f"{variable} Bar Comparison ({yr_range[0]}-{yr_range[1]})"
-            )
-        elif chart_type == "Heatmap":
-            # Prepare a pivot table for heatmap: countries x months
+        if chart_type == "Heatmap":
             filtered['month_num'] = pd.to_datetime(filtered['month']).dt.month
             pivot = filtered.pivot_table(
                 index='country',
@@ -86,14 +75,41 @@ else:
                 aspect="auto",
                 title=f"{variable} Heatmap (Country vs Month)"
             )
+        else:
+            # Line or bar chart
+            if chart_type == "Line":
+                fig2 = px.line(
+                    filtered,
+                    x='month',
+                    y=variable,
+                    color='country',
+                    title=f"{variable} Trend Comparison ({yr_range[0]}-{yr_range[1]})"
+                )
+            elif chart_type == "Bar":
+                fig2 = px.bar(
+                    filtered,
+                    x='month',
+                    y=variable,
+                    color='country',
+                    title=f"{variable} Bar Comparison ({yr_range[0]}-{yr_range[1]})"
+                )
+            # ---- Add Extreme Markers ----
+            if extremes is not None and not extremes.empty and chart_type in ("Line", "Bar"):
+                for country in sel_countries:
+                    df_ext = extremes[(extremes['country'] == country)]
+                    fig2.add_trace(go.Scatter(
+                        x=df_ext['month'],
+                        y=df_ext[variable],
+                        mode='markers',
+                        name=f'Extreme ({country})',
+                        marker=dict(color='red', size=12, symbol='x'),
+                        showlegend=True
+                    ))
         st.plotly_chart(fig2, use_container_width=True)
     else:
         st.info("No data for selected chart.")
 
-    # Extremes
-    if os.path.exists("analysis/extremes.csv"):
+    # Extremes Table
+    if extremes is not None:
         st.subheader("Detected Extremes")
-        ex = pd.read_csv("analysis/extremes.csv")
-        if sel_countries:
-            ex = ex[ex['country'].isin(sel_countries)]
-        st.dataframe(ex)
+        st.dataframe(extremes)
