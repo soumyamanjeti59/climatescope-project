@@ -5,8 +5,75 @@ import plotly.graph_objects as go
 import os
 import io
 
+# Add cohesive climate-themed background and UI style
+def add_cohesive_climate_style():
+    st.markdown(
+        """
+        <style>
+        /* Full app background with subtle dark overlay */
+        .stApp {
+            background: linear-gradient(rgba(15, 32, 39, 0.8), rgba(15, 32, 39, 0.8)), 
+                        url('https://images.unsplash.com/photo-1435224654926-ecc9f7fa028c?auto=format&fit=crop&w=1470&q=80');
+            background-size: cover;
+            background-position: center center;
+            background-attachment: fixed;
+            color: #f0f6f8;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background: rgba(20, 40, 50, 0.85) !important;
+            border-radius: 0 20px 20px 0;
+            font-size: 16px;
+            color: #d1d9e6 !important;
+        }
+        /* Sidebar spacing */
+        .css-1v3fvcr {
+            margin-bottom: 14px;
+        }
+        /* Sidebar labels */
+        .css-1a4t5cm {
+            color: #e0e6f2 !important;
+        }
+        /* Main content container styling */
+        .css-18e3th9 {
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+        /* Headings glow */
+        h1, h2, h3, h4 {
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.15);
+        }
+        /* Streamlit dataframe style */
+        .stDataFrame div[data-testid="stDataFrame"] {
+            border-radius: 12px !important;
+            box-shadow: 0 4px 8px rgba(255,255,255,0.1);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        /* Buttons style */
+        .stButton > button {
+            background-color: #3e6fc1;
+            color: white;
+            border-radius: 8px;
+            border: none;
+            box-shadow: 0 2px 6px rgba(62,111,193,0.6);
+            transition: background-color 0.3s ease;
+        }
+        .stButton > button:hover {
+            background-color: #2c4a8f;
+            box-shadow: 0 4px 12px rgba(44,74,143,0.8);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+add_cohesive_climate_style()
+
 st.set_page_config(layout="wide", page_title="ClimateScope Prototype")
-st.title("🌍 ClimateScope — Milestone 3 Prototype")
+st.title("🌍 Global Weather Monitor")
 
 DATA_PATH = "data/processed/monthly_agg.parquet"
 REQUIRED_COLS = ["country", "year", "month", "temperature_celsius", "precip_mm", "humidity", "wind_mps"]
@@ -27,9 +94,9 @@ else:
     sel_countries = st.sidebar.multiselect("Countries (compare multiple!)", countries, default=countries[:1])
     variable_options = [col for col in ["temperature_celsius", "precip_mm", "humidity", "wind_mps"] if col in df.columns]
     variable = st.sidebar.selectbox("Variable", variable_options)
-    years = sorted(df['year'].unique())
-    yr_min, yr_max = min(years), max(years)
-    yr_range = st.sidebar.slider("Year range", yr_min, yr_max, (yr_min, yr_max))
+
+    yr_range = st.sidebar.slider("Year range", 2000, 2025,
+                                 (min(df['year'].min(), 2000), max(df['year'].max(), 2000)))
 
     chart_type = st.sidebar.radio("Trend Chart Type", ["Line", "Bar", "Heatmap"])
 
@@ -44,11 +111,14 @@ else:
             ex = ex[ex['country'].isin(sel_countries)]
         extremes = ex
 
-    # Choropleth section
+    # ========================
+    # Choropleth Visualization
+    # ========================
     st.markdown("## Average Climate Measures by Country")
     st.markdown(
         "This choropleth map visualizes the average value of the selected variable across the chosen countries and time period."
     )
+
     if not filtered.empty:
         country_avg = filtered.groupby('country')[variable].mean().reset_index()
         fig = px.choropleth(
@@ -59,19 +129,31 @@ else:
             title=f"{variable} Average by Country",
             template="plotly_dark"
         )
+
+        # Remove dark outer container (keep dark map)
         fig.update_layout(
-            coloraxis_colorbar=dict(title=variable.replace("_"," ").title())
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+             coloraxis_colorbar=dict(title=variable.replace("_", " ").title()),
+             height=600,     # increase map height (default ~450)
+             width=1100,     # increase width for wide display
+             # # remove extra padding
+
         )
+
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No data for choropleth.")
 
-    # Trend section
+    # ========================
+    # Climate Trends Over Time
+    # ========================
     st.markdown("## Climate Trends Over Time")
     st.markdown(
         "Interactive trend charts allow you to compare how the selected variable changes over months and years among selected countries. "
         "Switch between line, bar, and heatmap views."
     )
+
     if not filtered.empty:
         if chart_type == "Heatmap":
             filtered['month_num'] = pd.to_datetime(filtered['month']).dt.month
@@ -123,7 +205,6 @@ else:
 
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Download Chart as PNG button
         buf = io.BytesIO()
         fig2.write_image(buf, format="png")
         st.download_button(
@@ -135,7 +216,6 @@ else:
     else:
         st.info("No data for selected chart.")
 
-    # Download filtered data as CSV button
     if not filtered.empty:
         csv = filtered.to_csv(index=False).encode('utf-8')
         st.download_button(
@@ -145,7 +225,9 @@ else:
             mime="text/csv",
         )
 
-    # Extremes section
+    # ========================
+    # Extreme Weather Events
+    # ========================
     st.markdown("## Detected Extreme Weather Events and Outliers")
     st.markdown(
         "The following table displays detected extreme temperature and precipitation events within your current filter settings."
